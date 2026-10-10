@@ -1,0 +1,216 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROBux Shop 💜</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10091b;color:#fff;font-family:Arial,sans-serif}
+header{background:#1c1030;padding:22px 15px;text-align:center;border-bottom:2px solid #9b5cff}
+h1{color:#c69aff;margin:0}
+main{max-width:900px;margin:auto;padding:18px}
+.status{color:#d7baff;text-align:center}
+.produtos{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:14px}
+.card{background:#211333;padding:16px;border:1px solid #513078;border-radius:15px;text-align:center}
+.preco{font-size:23px;color:#c69aff;font-weight:bold}
+button{border:0;border-radius:9px;padding:12px;background:#9147ff;color:white;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.45}
+.card button{width:100%}
+section{margin-top:25px;background:#1b1029;border-radius:15px;padding:16px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #49325e}
+.remover{background:#672c45;padding:8px}
+#total{font-size:22px;color:#c69aff}
+footer{text-align:center;padding:25px;color:#b8a4cc}
+</style>
+</head>
+<body>
+<header>
+  <h1>💜 ROBUX SHOP</h1>
+  <p>Sua loja de Robux</p>
+</header>
+
+<main>
+  <p id="status" class="status">Conectando ao Firebase...</p>
+
+  <h2>🛍️ Produtos</h2>
+  <div id="produtos" class="produtos"></div>
+
+  <section>
+    <h2>🛒 Meu carrinho</h2>
+    <div id="carrinho">Seu carrinho está vazio.</div>
+    <p>Total: <strong id="total">R$ 0,00</strong></p>
+    <button id="pedido">Continuar pedido</button>
+    <p id="aviso"></p>
+  </section>
+</main>
+
+<footer>ROBux Shop • Loja online</footer>
+
+<script type="module">
+import { initializeApp }
+from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+
+import {
+  getFirestore, collection, onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAwXNxi6pBMD_IuUoTeqQKxS6nDz2Fpy0I",
+  authDomain: "robux-shop-b6420.firebaseapp.com",
+  projectId: "robux-shop-b6420",
+  storageBucket: "robux-shop-b6420.firebasestorage.app",
+  messagingSenderId: "640103265389",
+  appId: "1:640103265389:web:2af29b60f69d77aef57b64"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const produtosEl = document.getElementById("produtos");
+const statusEl = document.getElementById("status");
+const carrinhoEl = document.getElementById("carrinho");
+const totalEl = document.getElementById("total");
+const avisoEl = document.getElementById("aviso");
+
+let produtos = [];
+let carrinho = [];
+
+function dinheiro(valor) {
+  return Number(valor).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+}
+
+function mostrarProdutos() {
+  produtosEl.replaceChildren();
+
+  const disponiveis = produtos.filter(p => p.ativo === true);
+
+  if (!disponiveis.length) {
+    produtosEl.textContent = "Nenhum produto disponível.";
+    return;
+  }
+
+  disponiveis.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const nome = document.createElement("h3");
+    nome.textContent = p.nome || "Produto";
+
+    const preco = document.createElement("p");
+    preco.className = "preco";
+    preco.textContent = dinheiro(p.preco);
+
+    const estoque = document.createElement("p");
+    estoque.textContent = "Estoque: " + (p.estoque ?? 0);
+
+    const botao = document.createElement("button");
+    botao.textContent = Number(p.estoque) > 0
+      ? "Adicionar ao carrinho" : "Esgotado";
+    botao.disabled = !(Number(p.estoque) > 0);
+    botao.addEventListener("click", () => adicionar(p.id));
+
+    card.append(nome, preco, estoque, botao);
+    produtosEl.appendChild(card);
+  });
+}
+
+function adicionar(id) {
+  const produto = produtos.find(p => p.id === id);
+  if (!produto) return;
+
+  const quantidade = carrinho
+    .filter(item => item.id === id)
+    .reduce((soma, item) => soma + item.qtd, 0);
+
+  if (quantidade >= Number(produto.estoque)) {
+    alert("Não há estoque suficiente.");
+    return;
+  }
+
+  const existente = carrinho.find(item => item.id === id);
+
+  if (existente) {
+    existente.qtd++;
+  } else {
+    carrinho.push({
+      id: produto.id,
+      nome: produto.nome,
+      preco: Number(produto.preco),
+      qtd: 1
+    });
+  }
+
+  mostrarCarrinho();
+}
+
+function remover(id) {
+  const item = carrinho.find(x => x.id === id);
+  if (item) item.qtd--;
+
+  carrinho = carrinho.filter(x => x.qtd > 0);
+  mostrarCarrinho();
+}
+
+function mostrarCarrinho() {
+  carrinhoEl.replaceChildren();
+  let total = 0;
+
+  carrinho.forEach(item => {
+    total += item.preco * item.qtd;
+
+    const linha = document.createElement("div");
+    linha.className = "item";
+
+    const descricao = document.createElement("span");
+    descricao.textContent =
+      `${item.nome} × ${item.qtd} — ${dinheiro(item.preco * item.qtd)}`;
+
+    const botao = document.createElement("button");
+    botao.className = "remover";
+    botao.textContent = "− Remover";
+    botao.addEventListener("click", () => remover(item.id));
+
+    linha.append(descricao, botao);
+    carrinhoEl.appendChild(linha);
+  });
+
+  if (carrinho.length === 0) {
+    carrinhoEl.textContent = "Seu carrinho está vazio.";
+  }
+
+  totalEl.textContent = dinheiro(total);
+}
+
+document.getElementById("pedido").addEventListener("click", () => {
+  if (!carrinho.length) {
+    alert("Adicione um produto primeiro.");
+    return;
+  }
+
+  avisoEl.textContent =
+    "Seu carrinho está pronto. O envio de pedidos e o pagamento ainda precisam ser configurados.";
+});
+
+onSnapshot(collection(db, "products"), snapshot => {
+  produtos = snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+
+  statusEl.textContent = "✅ Produtos carregados do Firebase!";
+  mostrarProdutos();
+}, error => {
+  console.error(error);
+  statusEl.textContent =
+    "Não foi possível carregar os produtos. Confira as regras do Firestore.";
+});
+
+mostrarCarrinho();
+</script>
+</body>
+</html>
